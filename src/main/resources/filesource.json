@@ -1,0 +1,7 @@
+{
+  "schema": {
+    "type": "string",
+    "optional": false
+  },
+  "payload": "INSERT INTO `user`(`id`, `username`, `password`, `balance`) VALUES (11, 'nijie', '123456', '1.0');"
+}
