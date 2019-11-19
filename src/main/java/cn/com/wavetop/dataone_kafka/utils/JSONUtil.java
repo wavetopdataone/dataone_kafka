@@ -1,8 +1,11 @@
 package cn.com.wavetop.dataone_kafka.utils;
 
+import cn.com.wavetop.dataone_kafka.entity.SysDbinfo;
+import com.alibaba.fastjson.JSONObject;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
 
 import java.io.*;
 import java.util.List;
@@ -98,5 +101,25 @@ public class JSONUtil {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+
+    public static SysDbinfo getSysDbinfo(String jsonString) {
+        SysDbinfo sysDbinfo = null;
+        try {
+            org.json.JSONObject jsonObject = new org.json.JSONObject(jsonString);
+            org.json.JSONObject sysDbinfoObject = jsonObject.getJSONObject("data");
+            sysDbinfo = SysDbinfo.builder()
+                    .host(sysDbinfoObject.getString("host"))
+                    .dbname(sysDbinfoObject.getString("dbname"))
+                    .user(sysDbinfoObject.getString("user"))
+                    .password(sysDbinfoObject.getString("password"))
+                    .port(sysDbinfoObject.getLong("port"))
+                    .type(sysDbinfoObject.getLong("type"))
+                    .build();
+        } catch (Exception e) {
+            // TODO: handle exception
+        }
+        return sysDbinfo;
     }
 }

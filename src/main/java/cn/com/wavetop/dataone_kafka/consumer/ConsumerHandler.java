@@ -6,6 +6,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.log4j.Logger;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.Arrays;
@@ -48,7 +49,13 @@ public class ConsumerHandler {
                     String value = (String)record.value();
                     Message message = JSONUtil.parseObject(value, Message.class);
                     System.out.println(message.getPayload());
-                    jdbcTemplate.update(message.getPayload());
+                    try {
+                        jdbcTemplate.update(message.getPayload());
+
+                    } catch (DataAccessException e) {
+                        e.printStackTrace();
+                        log.error(message.getPayload());
+                    }
                 }
             }else{
                 consumer = new KafkaConsumer<>(props);
@@ -58,7 +65,7 @@ public class ConsumerHandler {
             }
         }
     }
- 
+
     public void stop(){
         if (consumer != null) {
             consumer.wakeup();
@@ -81,5 +88,7 @@ public class ConsumerHandler {
             Thread.currentThread().interrupt();
         }
     }
+
+//    修改密码
  
 }

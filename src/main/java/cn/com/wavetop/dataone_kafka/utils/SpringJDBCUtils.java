@@ -18,14 +18,14 @@ public class SpringJDBCUtils {
     public static JdbcTemplate register(SysDbinfo sysDbinfo) throws Exception {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
 
-        if (sysDbinfo.getType() == 1) {
+        if (sysDbinfo.getType() == 2) {
             //1. 创建JdbcTemplate
             String url = "jdbc:mysql://" + sysDbinfo.getHost() + ":" + sysDbinfo.getPort() + "/" + sysDbinfo.getDbname() + "?characterEncoding=utf8&useUnicode=true&useSSL=false&serverTimezone=Asia/Shanghai";
             dataSource.setDriverClassName("com.mysql.jdbc.Driver");
             dataSource.setUrl(url);
             dataSource.setUsername(sysDbinfo.getUser());
             dataSource.setPassword(sysDbinfo.getPassword());
-        } else if (sysDbinfo.getType() == 2) {
+        } else if (sysDbinfo.getType() == 1) {
             //1. 创建JdbcTemplate
             String url = "jdbc:oracle:thin:@" + sysDbinfo.getHost() + ":" + sysDbinfo.getPort() + ":" + sysDbinfo.getDbname();
 //            Class.forName("");
