@@ -5,7 +5,9 @@ import cn.com.wavetop.dataone_kafka.utils.JSONUtil;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -13,15 +15,17 @@ import java.util.Arrays;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
- 
+
 public class ConsumerHandler {
-    static Logger log = Logger.getLogger(ConsumerHandler.class);
+
+    private static Logger log = LoggerFactory.getLogger(ConsumerHandler.class); // 日志
+
     // 本例中使用一个consumer将消息放入后端队列，你当然可以使用前一种方法中的多实例按照某张规则同时把消息放入后端队列
     private KafkaConsumer<String, String> consumer;
     private ExecutorService executors;
     private Properties props;
- 
-    public ConsumerHandler(String servers,String commit,String intervalms,String timeoutms,String groupId, String topic) {
+
+    public ConsumerHandler(String servers, String commit, String intervalms, String timeoutms, String groupId, String topic) {
 
         props = new Properties();
         System.out.println(servers);
@@ -37,16 +41,23 @@ public class ConsumerHandler {
         consumer = new KafkaConsumer<>(props);
         consumer.subscribe(Arrays.asList(topic));
     }
- 
-    public void execute(String topic, JdbcTemplate jdbcTemplate) throws Exception {
+
+    /**
+     * 以前直接读file文件
+     *
+     * @param topic
+     * @param jdbcTemplate
+     * @throws Exception
+     */
+    public void execute(String topic, JdbcTemplate jdbcTemplate, int jobId) throws Exception {
         while (true) {
             //kafka为空重连
-            if(consumer!=null){
+            if (consumer != null) {
                 ConsumerRecords<String, String> records = consumer.poll(200);
- 
+
                 for (final ConsumerRecord record : records) {
                     System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
-                    String value = (String)record.value();
+                    String value = (String) record.value();
                     Message message = JSONUtil.parseObject(value, Message.class);
                     System.out.println(message.getPayload());
                     try {
@@ -57,7 +68,7 @@ public class ConsumerHandler {
                         log.error(message.getPayload());
                     }
                 }
-            }else{
+            } else {
                 consumer = new KafkaConsumer<>(props);
                 consumer.subscribe(Arrays.asList(topic));
                 System.out.println("hehe");
@@ -66,12 +77,43 @@ public class ConsumerHandler {
         }
     }
 
-    public void stop(){
+    /**
+     * 最新的重载  用java直接写入topic的，然后执行
+     *
+     * @param jdbcTemplate
+     * @param topic
+     * @throws Exception
+     */
+    public void execute(JdbcTemplate jdbcTemplate, String topic, int jobId) throws Exception {
+        //kafka为空重连
+        if (consumer != null) {
+            ConsumerRecords<String, String> records = consumer.poll(200);
+
+            for (final ConsumerRecord record : records) {
+//                System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
+//                String value = (String) record.value();
+//                System.out.println(value);
+                try {
+                    jdbcTemplate.update((String) record.value());
+                    log.info("The consumer_job" + jobId + " Thread, message is :" + record.value());
+                } catch (Exception e) {
+                    log.error(e.getMessage() + "::" + record.value());
+                }
+            }
+        } else {
+            consumer = new KafkaConsumer<>(props);
+            consumer.subscribe(Arrays.asList(topic));
+            log.error("kafka连接失败！————ConsumerHandler--102");
+            return;
+        }
+    }
+
+    public void stop() {
         if (consumer != null) {
             consumer.wakeup();
         }
     }
- 
+
     public void shutdown() {
         if (consumer != null) {
             consumer.close();
@@ -90,5 +132,5 @@ public class ConsumerHandler {
     }
 
 //    修改密码
- 
+
 }

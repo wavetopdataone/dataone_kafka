@@ -10,12 +10,17 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import java.sql.DriverManager;
 
 
+/**
+ * @Author yongz
+ * @Date 2019/10/10、11:45
+ *
+ * 构建jdbctemplate工具类
+ */
 public class SpringJDBCUtils {
 
 
-
-//    @Bean
-    public static JdbcTemplate register(SysDbinfo sysDbinfo) throws Exception {
+    //    @Bean
+    public static JdbcTemplate register(SysDbinfo sysDbinfo)  {
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
 
         if (sysDbinfo.getType() == 2) {
@@ -39,8 +44,6 @@ public class SpringJDBCUtils {
         return new JdbcTemplate(dataSource);
 
     }
-
-
 
 
 }

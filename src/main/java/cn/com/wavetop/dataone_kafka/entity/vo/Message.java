@@ -19,5 +19,4 @@ public class Message {
     private Map schema;
     private String payload;
 
-
 }

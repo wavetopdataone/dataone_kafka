@@ -16,6 +16,7 @@ import java.nio.charset.Charset;
 /**
  * @Author yongz
  * @Date 2019/10/27、19:36
+ * kafka connect 通用工具类
  */
 public class HttpClientKafkaUtil {
     private static CloseableHttpClient httpClient = null;
