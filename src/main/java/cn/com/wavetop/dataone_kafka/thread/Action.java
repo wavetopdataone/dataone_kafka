@@ -4,8 +4,6 @@ import cn.com.wavetop.dataone_kafka.consumer.ConsumerHandler;
 import cn.com.wavetop.dataone_kafka.utils.TestGetFiles;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.web.client.RestTemplate;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -24,12 +22,12 @@ public class Action extends Thread {
     private static Logger log = LoggerFactory.getLogger(ConsumerHandler.class); // 日志
 
     // dataone后台安装的监听目录
-    private final String actionDir = "/opt/dataone/sqltemp/ACTION/";
-//    private final String actionDir = "D:/yongz/dataone/sqltemp/ACTION/";
+//    private final String actionDir = "/opt/dataone/sqltemp/ACTION/";
+    private final String actionDir = "D:/yongz/dataone/sqltemp/ACTION/";
     private boolean stopMe = true;
 
     // 存放job任务
-    private static Map<String, JobThread> jobTheads = new HashMap<>();
+    private static Map<String, JobThread00> jobTheads = new HashMap<>();
 
     public void stopMe() {
         stopMe = false;
@@ -60,7 +58,7 @@ public class Action extends Thread {
                             }
                         }
                         br.close();//别忘记，切记
-                        jobTheads.put("producer_job_" + jobId, new JobThread(jobId, sqlPath));
+                        jobTheads.put("producer_job_" + jobId, new JobThread00(jobId, sqlPath));
                         jobTheads.get("producer_job_" + jobId).start();
 
                         new File(actionDir + s).delete();

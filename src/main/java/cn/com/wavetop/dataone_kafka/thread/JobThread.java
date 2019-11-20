@@ -2,19 +2,21 @@ package cn.com.wavetop.dataone_kafka.thread;
 
 import cn.com.wavetop.dataone_kafka.config.SpringContextUtil;
 import cn.com.wavetop.dataone_kafka.consumer.ConsumerHandler;
+import cn.com.wavetop.dataone_kafka.entity.SysDbinfo;
 import cn.com.wavetop.dataone_kafka.producer.Producer;
 import cn.com.wavetop.dataone_kafka.utils.FileUtils;
 import cn.com.wavetop.dataone_kafka.utils.TestGetFiles;
+import com.sun.org.apache.bcel.internal.generic.IF_ACMPEQ;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.web.client.RestTemplate;
 
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -41,6 +43,10 @@ public class JobThread extends Thread {
     KafkaTemplate kafkaTemplate = (KafkaTemplate) SpringContextUtil.getBean("kafkaTemplate");
 
 
+    // 注入restTemplate
+    RestTemplate restTemplate = (RestTemplate) SpringContextUtil.getBean("restTemplate");
+
+
     public JobThread(Integer jodId, String sqlPath) {
         this.jodId = jodId;
         this.sqlPath = sqlPath;
@@ -51,79 +57,35 @@ public class JobThread extends Thread {
 
     @Override
     public void run() {
-        ArrayList<String> fileNames;
+//        ArrayList<String> fileNames;
+        // sync_range::1是全量，2是增量，3是增量+全量，4是存量
+        int sync_range = restTemplate.getForObject("http://192.168.1.226:8000/toback/findById/" + jodId, Integer.class);
         while (stopMe) {
-            File file = new File(sqlPath + "/offset"); // 创建文件记录java读取的位置
-            fileNames = TestGetFiles.getAllFileName(sqlPath);
-            if (!file.exists()) {
-                try {
-                    file.createNewFile();   // 创建文件记录java读取的位置
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            String[] offsetContent = FileUtils.readTxtFile(file).split("----");
-//            System.out.println(Arrays.toString(offsetContent));
-            // 判断offset文件是否有内容！！！
-            if (offsetContent.length <= 1) {
-                // 判断有没有全量文件，有则开始读全量文件
-                for (String fileName : fileNames) {
-                    if (fileName.equals("FULL_STOP")) {
-                        continue;
-                    }
-                    if (fileName.contains("FULL") || (fileName.contains("INCREMENT") && fileName.contains("0.sql"))) {
-                        try {
-                            FileUtils.writeTxtFile(readFile(sqlPath + "/" + fileName, 0), file);  // 读取文件，并更新offset信息
-                            // 任务既然到了这里了，则说明已经有数据生成了，既然有数据生成了，则需要开启消费者线程！
-                            jobconsumers.put("consumer_job_" + jodId, new JobConsumerThread(jodId));
-                            jobconsumers.get("consumer_job_" + jodId).start();
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-            }
-            // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
-            else if (new File(offsetContent[0]).exists()) {
-                try {
-                    FileUtils.writeTxtFile(readFile(offsetContent[0], Integer.parseInt(offsetContent[1])), file);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+            File file = null;
+            switch (sync_range) {
+                case 1:
+//                    fullRang(); // 全量
+                    file = new File(sqlPath + "/full_offset");
+                    universalRang(file, "FULL", true);
+                    break;
 
-            }
-            // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
-            else {
-                // 下一个文件是啥需要判断
-                // 如果当前offset里存的是全量文件，则开始读第一个增量文件
-                if (offsetContent[0].contains("FULL")) {
-                    for (String fileName : fileNames) {
-                        if (fileName.contains("INCREMENT") && fileName.contains("1.sql")) {
-                            try {
-                                FileUtils.writeTxtFile(readFile(sqlPath + "/" + fileName, 0), file);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                            }
-                        }
-                    }
-                }
-                // 如果当前offset里存的是增量文件，则开始读下一个增量文件
-                else {
-                    String befor = offsetContent[0].substring(0, offsetContent[0].indexOf(".sql") - 1);
-                    int i = Integer.parseInt(offsetContent[0].substring(offsetContent[0].indexOf(".sql") - 1, offsetContent[0].indexOf(".sql"))) + 1;
-                    String fileName_ = befor + i + ".sql";
-//                    System.out.println(fileName_); // 打印下一个需要跑的文件
+                case 2:
+//                    incrementRang();// 增量
+                    file = new File(sqlPath + "/increment_offset");
+                    universalRang(file, "INCREMENT", true);
+                    break;
 
-                    if (new File(fileName_).exists()) {
-                        try {
-                            FileUtils.writeTxtFile(readFile(fileName_, 0), file);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
+                case 3:
+                    fullAndIncrementRang(); // 增量+全量
+                    break;
 
+                case 4:
+                    stockRang(); // 存量
+                    break;
 
-                }
+                default:
+                    file = new File(sqlPath + "/full_offset"); // 默认为全量
+                    universalRang(file, "FULL", true);
             }
 
 
@@ -133,13 +95,163 @@ public class JobThread extends Thread {
                 e.printStackTrace();
             }
         }
-        //  当生产者线程被停掉时也将关闭消费者线程！
+
+//          当生产者线程被停掉时也将关闭消费者线程！
         try {
-            Thread.sleep(10000);  // 10秒后关掉任务线程
+            Thread.sleep(10000);  // 10秒后关掉任务消费线程
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
         jobconsumers.get("consumer_job_" + jodId).stopMe();
+
+    }
+
+
+    public void test(String[] args) {
+        File file = new File(sqlPath + "/full_offset"); // 创建文件记录java读取的位置
+        universalRang(file, "FULL", true);
+    }
+
+    /**
+     * 通用抽取方法
+     */
+    private void universalRang(File file, String rang, Boolean flag) {
+        ArrayList<String> fileNames = TestGetFiles.getAllFileName(sqlPath);
+//        File file = new File(sqlPath + "/full_offset"); // 创建文件记录java读取的位置
+        if (!file.exists()) {
+            try {
+                file.createNewFile();   // 创建文件记录java读取的位置
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        String[] offsetContent = FileUtils.readTxtFile(file).split("----");
+        // 判断offset文件是否有内容！！！
+        if (offsetContent.length <= 1) {
+            // 判断有没有全量文件，有则开始读全量文件
+            for (String fileName : fileNames) {
+                if (fileName.equals("FULL_STOP")) {
+                    continue;
+                }
+                if ((fileName.contains(rang) && fileName.contains("0.sql"))) {
+                    try {
+                        FileUtils.writeTxtFile(readFile(sqlPath + "/" + fileName, 0), file);  // 读取文件，并更新offset信息
+                        // 任务既然到了这里了，则说明已经有数据生成了，既然有数据生成了，则需要开启消费者线程！
+                        if (flag) {  // flag 为了让增量+全量的时候，增量部分就不用在开线程去读了
+                            jobconsumers.put("consumer_job_" + jodId, new JobConsumerThread(jodId));
+                            jobconsumers.get("consumer_job_" + jodId).start();
+                        }
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        else if (new File(offsetContent[0]).exists()) {
+            try {
+                FileUtils.writeTxtFile(readFile(offsetContent[0], Integer.parseInt(offsetContent[1])), file);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
+        // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        else {
+            // 下一个文件是啥需要判断
+            String befor = offsetContent[0].substring(0, offsetContent[0].indexOf(".sql") - 1);
+            int i = Integer.parseInt(offsetContent[0].substring(offsetContent[0].indexOf(".sql") - 1, offsetContent[0].indexOf(".sql"))) + 1;
+            String fileName_ = befor + i + ".sql";
+            if (new File(fileName_).exists()) {
+                try {
+                    FileUtils.writeTxtFile(readFile(fileName_, 0), file);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+
+        }
+    }
+
+
+    /**
+     * 全量+增量抽取
+     */
+    private void fullAndIncrementRang() {
+        File full_offset = new File(sqlPath + "/full_offset"); // 创建文件记录java读取的位置
+        File increment_offset = new File(sqlPath + "/increment_offset"); // 创建文件记录java读取的位置
+        ArrayList<String> fileNames = TestGetFiles.getAllFileName(sqlPath);
+        if (!full_offset.exists()) {
+            try {
+                full_offset.createNewFile();   // 创建文件记录java读取的位置
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        String[] full_offsetContent = FileUtils.readTxtFile(full_offset).split("----");
+
+//            System.out.println(Arrays.toString(offsetContent));
+        // 判断全量文件是否有内容！！！
+        if (full_offsetContent.length <= 1) {
+            // 判断有没有全量文件，有则开始读全量文件
+            for (String fileName : fileNames) {
+                if (fileName.equals("FULL_STOP")) {
+                    continue;
+                }
+                if ((fileName.contains("FULL") && fileName.contains("0.sql"))) {
+                    try {
+                        FileUtils.writeTxtFile(readFile(sqlPath + "/" + fileName, 0), full_offset);  // 读取文件，并更新offset信息
+                        // 任务既然到了这里了，则说明已经有数据生成了，既然有数据生成了，则需要开启消费者线程！
+                        jobconsumers.put("consumer_job_" + jodId, new JobConsumerThread(jodId));
+                        jobconsumers.get("consumer_job_" + jodId).start();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+        // 判断full_offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        // full_offset有内容了可以开始读增量文件了
+        else if (new File(full_offsetContent[0]).exists()) {
+            try {
+                FileUtils.writeTxtFile(readFile(full_offsetContent[0], Integer.parseInt(full_offsetContent[0])), full_offset);
+                // 开始读增量的文件
+                universalRang(increment_offset, "INCREMENT", false);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
+        // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        else {
+            // 下一个文件是啥需要判断
+            String befor = full_offsetContent[0].substring(0, full_offsetContent[0].indexOf(".sql") - 1);
+            int i = Integer.parseInt(full_offsetContent[0].substring(full_offsetContent[0].indexOf(".sql") - 1, full_offsetContent[0].indexOf(".sql"))) + 1;
+            String fileName_ = befor + i + ".sql";
+            if (new File(fileName_).exists()) {
+                try {
+                    FileUtils.writeTxtFile(readFile(fileName_, 0), full_offset);
+                    // 开始读增量的文件
+                    universalRang(increment_offset, "INCREMENT", false);
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+        }
+
+
+    }
+
+
+    /**
+     * 存量抽取
+     */
+    private void stockRang() {
 
     }
 
@@ -202,4 +314,134 @@ public class JobThread extends Thread {
     public void setSqlPath(String sqlPath) {
         this.sqlPath = sqlPath;
     }
+
+
+    /**
+     * 全量抽取  该方法已弃用
+     */
+    @Deprecated
+    private void fullRang() {
+        ArrayList<String> fileNames = TestGetFiles.getAllFileName(sqlPath);
+        File file = new File(sqlPath + "/full_offset"); // 创建文件记录java读取的位置
+        if (!file.exists()) {
+            try {
+                file.createNewFile();   // 创建文件记录java读取的位置
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        String[] offsetContent = FileUtils.readTxtFile(file).split("----");
+        // 判断offset文件是否有内容！！！
+        if (offsetContent.length <= 1) {
+            // 判断有没有全量文件，有则开始读全量文件
+            for (String fileName : fileNames) {
+                if (fileName.equals("FULL_STOP")) {
+                    continue;
+                }
+                if ((fileName.contains("FULL") && fileName.contains("0.sql"))) {
+                    try {
+                        FileUtils.writeTxtFile(readFile(sqlPath + "/" + fileName, 0), file);  // 读取文件，并更新offset信息
+                        // 任务既然到了这里了，则说明已经有数据生成了，既然有数据生成了，则需要开启消费者线程！
+
+                        jobconsumers.put("consumer_job_" + jodId, new JobConsumerThread(jodId));
+                        jobconsumers.get("consumer_job_" + jodId).start();
+
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        else if (new File(offsetContent[0]).exists()) {
+            try {
+                FileUtils.writeTxtFile(readFile(offsetContent[0], Integer.parseInt(offsetContent[1])), file);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
+        // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        else {
+            // 下一个文件是啥需要判断
+            String befor = offsetContent[0].substring(0, offsetContent[0].indexOf(".sql") - 1);
+            int i = Integer.parseInt(offsetContent[0].substring(offsetContent[0].indexOf(".sql") - 1, offsetContent[0].indexOf(".sql"))) + 1;
+            String fileName_ = befor + i + ".sql";
+            if (new File(fileName_).exists()) {
+                try {
+                    FileUtils.writeTxtFile(readFile(fileName_, 0), file);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+
+        }
+    }
+
+    /**
+     * 增量抽取 该方法已弃用
+     */
+    @Deprecated
+    private void incrementRang() {
+        ArrayList<String> fileNames = TestGetFiles.getAllFileName(sqlPath);
+        File file = new File(sqlPath + "/increment_offset"); // 创建文件记录java读取的位置
+        if (!file.exists()) {
+            try {
+                file.createNewFile();   // 创建文件记录java读取的位置
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+        String[] offsetContent = FileUtils.readTxtFile(file).split("----");
+        // 判断offset文件是否有内容！！！
+        if (offsetContent.length <= 1) {
+            // 判断有没有全量文件，有则开始读全量文件
+            for (String fileName : fileNames) {
+                if (fileName.equals("FULL_STOP")) {
+                    continue;
+                }
+                if ((fileName.contains("INCREMENT") && fileName.contains("0.sql"))) {
+                    try {
+                        FileUtils.writeTxtFile(readFile(sqlPath + "/" + fileName, 0), file);  // 读取文件，并更新offset信息
+                        // 任务既然到了这里了，则说明已经有数据生成了，既然有数据生成了，则需要开启消费者线程！
+
+                        jobconsumers.put("consumer_job_" + jodId, new JobConsumerThread(jodId));
+
+                        jobconsumers.get("consumer_job_" + jodId).start();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+        }
+
+        // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        else if (new File(offsetContent[0]).exists()) {
+            try {
+                FileUtils.writeTxtFile(readFile(offsetContent[0], Integer.parseInt(offsetContent[1])), file);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+
+        }
+        // 判断offset文件内容中的文件是否存在，存在则继续读取该文件，不存在则开始读取下一个文件，
+        else {
+            // 下一个文件是啥需要判断
+            String befor = offsetContent[0].substring(0, offsetContent[0].indexOf(".sql") - 1);
+            int i = Integer.parseInt(offsetContent[0].substring(offsetContent[0].indexOf(".sql") - 1, offsetContent[0].indexOf(".sql"))) + 1;
+            String fileName_ = befor + i + ".sql";
+            if (new File(fileName_).exists()) {
+                try {
+                    FileUtils.writeTxtFile(readFile(fileName_, 0), file);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+
+        }
+    }
+
 }

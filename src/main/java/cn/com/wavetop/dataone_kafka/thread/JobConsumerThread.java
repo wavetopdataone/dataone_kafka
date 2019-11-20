@@ -31,7 +31,7 @@ public class JobConsumerThread extends Thread {
 
 //        restTemplate.getForObject("192.168.1.1");
 
-        SysDbinfo source = restTemplate.getForObject("http://192.168.1.226:8000/sys_jobrela/findById?jobId=" + jodId, SysDbinfo.class);
+        SysDbinfo source = restTemplate.getForObject("http://192.168.1.226:8000/toback/findById?jobId=" + jodId, SysDbinfo.class);
         System.out.println(source);
 
         JdbcTemplate jdbcTemplate = null;
@@ -40,7 +40,7 @@ public class JobConsumerThread extends Thread {
         } catch (Exception e) {
             e.printStackTrace();
         }
-        ConsumerHandler consumers = new ConsumerHandler("192.168.1.187:9092,192.168.1.170:9092,192.168.1.151:9092", "true", "60", "-1", "JodId_" + jodId, "JodId_" + jodId);
+        ConsumerHandler consumers = new ConsumerHandler("192.168.1.187:9092,192.168.1.170:9092,192.168.1.145:9092", "true", "60", "-1", "JodId_" + jodId, "JodId_" + jodId);
 
         try {
             while (stopMe) {
