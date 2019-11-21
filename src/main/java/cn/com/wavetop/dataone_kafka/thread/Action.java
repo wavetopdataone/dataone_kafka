@@ -22,8 +22,8 @@ public class Action extends Thread {
     private static Logger log = LoggerFactory.getLogger(ConsumerHandler.class); // 日志
 
     // dataone后台安装的监听目录
-//    private final String actionDir = "/opt/dataone/sqltemp/ACTION/";
-    private final String actionDir = "D:/yongz/dataone/sqltemp/ACTION/";
+    private final String actionDir = "/opt/dataone/sqltemp/ACTION/";
+//    private final String actionDir = "D:/yongz/dataone/sqltemp/ACTION/";
     private boolean stopMe = true;
 
     // 存放job任务
@@ -69,11 +69,20 @@ public class Action extends Thread {
                     }
 
 
-                } else if (s.split("_")[1].equals("stop")) {
+                } else if (s.split("_")[1].equals("stop") || s.split("_")[1].equals("pause")) {
+
+                    System.out.println("关闭任务线程，jobId：" + jobId);
                     // 关闭任务线程
                     jobTheads.get("job_" + jobId).stopMe();
+
+                    new File(actionDir + s).delete();
                 } else if (s.split("_")[1].equals("resume")) {
+                    System.out.println("重启任务线程，jobId：" + jobId);
                     // 重启任务线程
+                    jobTheads.get("job_" + jobId).startMe();
+                    jobTheads.get("job_" + jobId).start();
+
+                    new File(actionDir + s).delete(); // 删除文件
                 }
 
 
@@ -81,7 +90,7 @@ public class Action extends Thread {
             try {
                 System.out.println("第" + index++ + "次结束！");
                 Thread.sleep(5000);
-                System.out.println("当前开启的线程数："+Thread.getAllStackTraces().keySet().size());
+                System.out.println("当前开启的线程数：" + Thread.getAllStackTraces().keySet().size());
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }

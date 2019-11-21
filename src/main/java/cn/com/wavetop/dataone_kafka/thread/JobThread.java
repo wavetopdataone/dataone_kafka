@@ -68,14 +68,14 @@ public class JobThread extends Thread {
 //                    fullRang(); // 全量
                     System.out.println("执行全量任务:" + jodId);
                     file = new File(sqlPath + "/full_offset");
-                    universalRang(file, "FULL", true);
+                    universalRang(file, "FULL", "0.sql",true);
                     break;
 
                 case 2:
 //                    incrementRang();// 增量
                     System.out.println("执行增量任务:" + jodId);
                     file = new File(sqlPath + "/increment_offset");
-                    universalRang(file, "INCREMENT", true);
+                    universalRang(file, "INCREMENT","0.sql", true);
                     break;
 
                 case 3:
@@ -92,7 +92,7 @@ public class JobThread extends Thread {
 
                 default:
                     file = new File(sqlPath + "/full_offset"); // 默认为全量
-                    universalRang(file, "FULL", true);
+                    universalRang(file, "FULL", "0.sql",true);
             }
 
 
@@ -119,7 +119,7 @@ public class JobThread extends Thread {
 
     public void test(String[] args) {
         File file = new File(sqlPath + "/full_offset"); // 创建文件记录java读取的位置
-        universalRang(file, "FULL", true);
+//        universalRang(file, "FULL", true);
     }
 
 
@@ -130,7 +130,8 @@ public class JobThread extends Thread {
      * @param rang
      * @param flag 判断全量+增量的方法调用时不再开启消费线程
      */
-    private void universalRang(File file, String rang, Boolean flag) {
+    private void universalRang(File file, String rang,String startSql, Boolean flag) {
+        System.out.println("进来了啊。没错啊！");
         ArrayList<String> fileNames = TestGetFiles.getAllFileName(sqlPath);
 //        File file = new File(sqlPath + "/full_offset"); // 创建文件记录java读取的位置
         if (!file.exists()) {
@@ -148,7 +149,8 @@ public class JobThread extends Thread {
                 if (fileName.equals("FULL_STOP")) {
                     continue;
                 }
-                if ((fileName.contains(rang) && fileName.contains("0.sql"))) {
+                if ((fileName.contains(rang) && fileName.contains(startSql))) {
+                    System.out.println("真的进来了啊。没错啊！");
                     try {
                         FileUtils.writeTxtFile(readFile(sqlPath + "/" + fileName, 0), file);  // 读取文件，并更新offset信息
                         // 任务既然到了这里了，则说明已经有数据生成了，既然有数据生成了，则需要开启消费者线程！
@@ -233,7 +235,7 @@ public class JobThread extends Thread {
             try {
                 FileUtils.writeTxtFile(readFile(full_offsetContent[0], Integer.parseInt(full_offsetContent[0])), full_offset);
                 // 开始读增量的文件
-                universalRang(increment_offset, "INCREMENT", false);
+                universalRang(increment_offset, "INCREMENT", "1.sql",false);
 
             } catch (Exception e) {
                 e.printStackTrace();
@@ -249,13 +251,12 @@ public class JobThread extends Thread {
             if (new File(fileName_).exists()) {
                 try {
                     FileUtils.writeTxtFile(readFile(fileName_, 0), full_offset);
-                    // 开始读增量的文件
-                    universalRang(increment_offset, "INCREMENT", false);
-
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
+            // 开始读增量的文件
+            universalRang(increment_offset, "INCREMENT","1.sql", false);
 
         }
 
@@ -320,6 +321,10 @@ public class JobThread extends Thread {
         stopMe = false;
     }
 
+    // 重启当前线程
+    public void startMe() {
+        stopMe = true;
+    }
 
     // setter
     public void setJodId(Integer jodId) {
