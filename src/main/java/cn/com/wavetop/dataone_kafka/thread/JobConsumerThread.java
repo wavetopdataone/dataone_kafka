@@ -31,7 +31,7 @@ public class JobConsumerThread extends Thread {
 
 //        restTemplate.getForObject("192.168.1.1");
 
-        SysDbinfo source = restTemplate.getForObject("http://192.168.1.226:8000/toback/findById?jobId=" + jodId, SysDbinfo.class);
+        SysDbinfo source = restTemplate.getForObject("http://192.168.1.226:8000/toback/findById/" + jodId, SysDbinfo.class);
         System.out.println(source);
 
         JdbcTemplate jdbcTemplate = null;

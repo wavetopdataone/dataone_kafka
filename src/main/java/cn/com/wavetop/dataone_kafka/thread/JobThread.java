@@ -59,27 +59,34 @@ public class JobThread extends Thread {
     public void run() {
 //        ArrayList<String> fileNames;
         // sync_range::1是全量，2是增量，3是增量+全量，4是存量
-        int sync_range = restTemplate.getForObject("http://192.168.1.226:8000/toback/findById/" + jodId, Integer.class);
+        int sync_range = restTemplate.getForObject("http://192.168.1.226:8000/toback/find_range/" + jodId, Integer.class);
+
         while (stopMe) {
             File file = null;
             switch (sync_range) {
                 case 1:
 //                    fullRang(); // 全量
+                    System.out.println("执行全量任务:" + jodId);
                     file = new File(sqlPath + "/full_offset");
                     universalRang(file, "FULL", true);
                     break;
 
                 case 2:
 //                    incrementRang();// 增量
+                    System.out.println("执行增量任务:" + jodId);
                     file = new File(sqlPath + "/increment_offset");
                     universalRang(file, "INCREMENT", true);
                     break;
 
                 case 3:
+
+                    System.out.println("执行全量+增量任务:" + jodId);
                     fullAndIncrementRang(); // 增量+全量
                     break;
 
                 case 4:
+
+                    System.out.println("执行存量任务:" + jodId);
                     stockRang(); // 存量
                     break;
 
@@ -90,10 +97,13 @@ public class JobThread extends Thread {
 
 
             try {
-                Thread.sleep(1000);
+
+                Thread.sleep(1000); // 每秒监听一次
+
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
+
         }
 
 //          当生产者线程被停掉时也将关闭消费者线程！
@@ -112,8 +122,13 @@ public class JobThread extends Thread {
         universalRang(file, "FULL", true);
     }
 
+
     /**
      * 通用抽取方法
+     *
+     * @param file
+     * @param rang
+     * @param flag 判断全量+增量的方法调用时不再开启消费线程
      */
     private void universalRang(File file, String rang, Boolean flag) {
         ArrayList<String> fileNames = TestGetFiles.getAllFileName(sqlPath);

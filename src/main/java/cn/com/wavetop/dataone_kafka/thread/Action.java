@@ -27,7 +27,7 @@ public class Action extends Thread {
     private boolean stopMe = true;
 
     // 存放job任务
-    private static Map<String, JobThread00> jobTheads = new HashMap<>();
+    private static Map<String, JobThread> jobTheads = new HashMap<>();
 
     public void stopMe() {
         stopMe = false;
@@ -58,7 +58,7 @@ public class Action extends Thread {
                             }
                         }
                         br.close();//别忘记，切记
-                        jobTheads.put("producer_job_" + jobId, new JobThread00(jobId, sqlPath));
+                        jobTheads.put("producer_job_" + jobId, new JobThread(jobId, sqlPath));
                         jobTheads.get("producer_job_" + jobId).start();
 
                         new File(actionDir + s).delete();
